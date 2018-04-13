@@ -7822,7 +7822,7 @@ WLANTL_FatalErrorHandler
     * Issue SSR. vos_wlanRestart has tight checks to make sure that
     * we do not send an FIQ if previous FIQ is not processed
     */
-   vos_wlanRestart(VOS_REASON_UNSPECIFIED);
+   vos_wlanRestart();
 }
 
 /*==========================================================================
@@ -11852,8 +11852,8 @@ WLAN_TLAPGetNextTxIds
 
   ++ucNextSTA;
 
-    if ( WLAN_MAX_STA_COUNT <= ucNextSTA )
-      ucNextSTA = 0;
+  if ( WLAN_MAX_STA_COUNT <= ucNextSTA )
+    ucNextSTA = 0;
 
     isServed = FALSE;
     if ( 0 == pTLCb->ucCurLeftWeight )
