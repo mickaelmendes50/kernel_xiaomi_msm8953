@@ -1,4 +1,5 @@
 /* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -683,9 +684,9 @@ static ssize_t qpnp_wled_dim_mode_store(struct device *dev,
 	if (snprintf(str, QPNP_WLED_STR_SIZE, "%s", buf) > QPNP_WLED_STR_SIZE)
 		return -EINVAL;
 
-	if (strcmp(str, "analog\n") == 0)
+	if (strcmp(str, "analog") == 0)
 		temp = QPNP_WLED_DIM_ANALOG;
-	else if (strcmp(str, "digital\n") == 0)
+	else if (strcmp(str, "digital") == 0)
 		temp = QPNP_WLED_DIM_DIGITAL;
 	else
 		temp = QPNP_WLED_DIM_HYBRID;

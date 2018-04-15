@@ -14,12 +14,10 @@ enum FP_MODE {
 
 #define SUPPORT_NAV_EVENT
 #if defined(SUPPORT_NAV_EVENT)
-
 #define GF_NAV_INPUT_DOUBLE_CLICK	KEY_VOLUMEUP
 #define GF_NAV_INPUT_LONG_PRESS		KEY_SEARCH
 #define GF_NAV_INPUT_HEAVY		KEY_CHAT
 #endif
-
 
 #if defined(SUPPORT_NAV_EVENT)
 typedef enum gf_nav_event {
@@ -96,16 +94,12 @@ struct gf_ioc_chip_info {
 #define  GF_IOC_MAXNR    14  /* THIS MACRO IS NOT USED NOW... */
 #endif
 
-
 #define  USE_PLATFORM_BUS     1
-
-
 #define GF_NETLINK_ENABLE 1
 #define GF_NET_EVENT_IRQ 1
 #define GF_NET_EVENT_FB_BLACK 2
 #define GF_NET_EVENT_FB_UNBLACK 3
 #define NETLINK_TEST 25
-
 
 static const char * const pctl_names[] = {
 
@@ -143,8 +137,6 @@ struct gf_dev {
 	struct notifier_block notifier;
 	char device_available;
 	char fb_black;
-	char wait_finger_down;
-	struct work_struct work;
 
 };
 

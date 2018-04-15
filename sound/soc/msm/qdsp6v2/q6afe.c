@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,7 +23,6 @@
 #include <sound/apr_audio-v2.h>
 #include <sound/q6afe-v2.h>
 #include <sound/q6audio-v2.h>
-#include <sound/q6core.h>
 #include "msm-pcm-routing-v2.h"
 #include <sound/audio_cal_utils.h>
 #include <sound/adsp_err.h>
@@ -119,17 +118,9 @@ struct afe_ctl {
 	struct aanc_data aanc_info;
 	struct mutex afe_cmd_lock;
 	int set_custom_topology;
-#ifdef CONFIG_SND_SOC_MAX98927
-	uint8_t *dsm_payload;
-#endif
 };
 
-#define MAD_SLIMBUS_PORT_COUNT ((SLIMBUS_PORT_LAST - SLIMBUS_0_RX) + 1)
-#define MAD_MI2S_PORT_COUNT ((MI2S_PORT_LAST - AFE_PORT_ID_PRIMARY_MI2S_TX) \
-				+ 1)
-
-static atomic_t afe_ports_mad_type[MAD_SLIMBUS_PORT_COUNT +
-				MAD_MI2S_PORT_COUNT];
+static atomic_t afe_ports_mad_type[SLIMBUS_PORT_LAST - SLIMBUS_0_RX];
 static unsigned long afe_configured_cmd;
 
 static struct afe_ctl this_afe;
@@ -258,29 +249,6 @@ static int32_t sp_make_afe_callback(uint32_t *payload, uint32_t payload_size)
 			atomic_set(&this_afe.state, -1);
 		}
 	}
-#ifdef CONFIG_SND_SOC_MAX98927
-	if (param_id == AFE_PARAM_ID_DSM_CFG) {
-		struct afe_dsm_get_resp *dsm_resp =
-			(struct afe_dsm_get_resp *) payload;
-
-		if (payload_size < sizeof(*dsm_resp)) {
-			pr_err("%s: Error: received size %d, afe_dsm_get_resp size %zu\n",
-				__func__, payload_size, sizeof(*dsm_resp));
-			return -EINVAL;
-		}
-
-		if (this_afe.dsm_payload)
-			memcpy(this_afe.dsm_payload, dsm_resp->payload,
-				payload_size - sizeof(*dsm_resp));
-
-		if (!dsm_resp->status) {
-			atomic_set(&this_afe.state, 0);
-		} else {
-			pr_debug("%s: dsm resp status: %d", __func__, dsm_resp->status);
-			atomic_set(&this_afe.state, -1);
-		}
-	}
-#endif
 
 	return 0;
 }
@@ -568,7 +536,6 @@ int afe_get_port_type(u16 port_id)
 	case AFE_PORT_ID_QUATERNARY_TDM_TX_5:
 	case AFE_PORT_ID_QUATERNARY_TDM_TX_6:
 	case AFE_PORT_ID_QUATERNARY_TDM_TX_7:
-	case AFE_LOOPBACK_TX:
 		ret = MSM_AFE_PORT_TYPE_TX;
 		break;
 
@@ -915,110 +882,6 @@ fail_cmd:
 		__func__, config.pdata.param_id, ret);
 return ret;
 }
-
-#ifdef CONFIG_SND_SOC_MAX98927
-int afe_dsm_setget_params(uint8_t *payload, int size, int dir)
-{
-	struct afe_dsm_set_command *set = NULL;
-	struct afe_dsm_get_command *get = NULL;
-	uint32_t *config = NULL;
-	int ret = -EINVAL, dst_port = AFE_PORT_ID_QUINARY_MI2S_RX;
-	int index = 0;
-
-	if (!payload || size <= 0) {
-		pr_err("%s: Invalid params\n", __func__);
-		goto fail_cmd;
-	}
-	ret = q6audio_validate_port(dst_port);
-	if (ret < 0) {
-		pr_err("%s: Invalid src port 0x%x ret %d",
-				__func__, dst_port, ret);
-		ret = -EINVAL;
-		goto fail_cmd;
-	}
-
-	index = q6audio_get_port_index(dst_port);
-	if (index < 0 || index > AFE_MAX_PORTS) {
-		pr_err("%s: AFE port index[%d] invalid!\n",
-				__func__, index);
-		ret = -EINVAL;
-		goto fail_cmd;
-	}
-
-	if (dir) {
-		get = (struct afe_dsm_get_command *) (payload - sizeof(*get));
-
-		memset(get, 0 , sizeof(*get));
-
-		get->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-		get->hdr.pkt_size = size + sizeof(*get);
-		get->hdr.token = index;
-		get->hdr.opcode = AFE_PORT_CMD_GET_PARAM_V2;
-		get->param.port_id = q6audio_get_port_id(dst_port);
-		get->param.payload_size = size + sizeof(struct afe_port_param_data_v2);
-		get->param.module_id = AFE_MODULE_DSM_RX;
-		get->param.param_id = AFE_PARAM_ID_DSM_CFG;
-		get->pdata.module_id = AFE_MODULE_DSM_RX;
-		get->pdata.param_id = AFE_PARAM_ID_DSM_CFG;
-		get->pdata.param_size = size;
-
-		this_afe.dsm_payload = payload;
-
-		config = (uint32_t *)get;
-	} else {
-		set = (struct afe_dsm_set_command *) (payload - sizeof(*set));
-
-		memset(set, 0 , sizeof(*set));
-
-		set->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-		set->hdr.pkt_size = size + sizeof(*set);
-		set->hdr.token = index;
-		set->hdr.opcode = AFE_PORT_CMD_SET_PARAM_V2;
-		set->param.port_id = q6audio_get_port_id(dst_port);
-		set->param.payload_size = size + sizeof(struct afe_port_param_data_v2);
-		set->pdata.module_id = AFE_MODULE_DSM_RX;
-		set->pdata.param_id = AFE_PARAM_ID_DSM_CFG;
-		set->pdata.param_size = size;
-
-		config = (uint32_t *)set;
-	}
-
-	atomic_set(&this_afe.state, 1);
-	atomic_set(&this_afe.status, 0);
-	ret = apr_send_pkt(this_afe.apr, config);
-	if (ret < 0) {
-		pr_err("%s: port = 0x%x failed %d\n", __func__, dst_port, ret);
-		goto fail_cmd;
-	}
-	ret = wait_event_timeout(this_afe.wait[index],
-		(atomic_read(&this_afe.state) == 0),
-		msecs_to_jiffies(TIMEOUT_MS));
-	if (!ret) {
-		pr_err("%s: wait_event timeout\n", __func__);
-		ret = -EINVAL;
-		goto fail_cmd;
-	}
-	if (atomic_read(&this_afe.status) > 0) {
-		pr_err("%s: config cmd failed [%s]\n",
-			__func__, adsp_err_get_err_str(
-			atomic_read(&this_afe.status)));
-		ret = adsp_err_get_lnx_err_code(
-				atomic_read(&this_afe.status));
-		goto fail_cmd;
-	}
-
-	ret = 0;
-
-fail_cmd:
-	pr_debug("%s: status %d 0x%x\n", __func__, ret, dst_port);
-
-	this_afe.dsm_payload = NULL;
-
-	return ret;
-}
-#endif
 
 static int afe_spk_prot_prepare(int src_port, int dst_port, int param_id,
 		union afe_spkr_prot_config *prot_config)
@@ -2029,11 +1892,8 @@ int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type)
 		mad_type = MAD_SW_AUDIO;
 		return 0;
 	}
-	if (port_id == AFE_PORT_ID_QUATERNARY_MI2S_TX)
-		i = MAD_SLIMBUS_PORT_COUNT + (port_id -
-				AFE_PORT_ID_PRIMARY_MI2S_TX) - 1;
-	else
-		i = port_id - SLIMBUS_0_RX;
+
+	i = port_id - SLIMBUS_0_RX;
 	if (i < 0 || i >= ARRAY_SIZE(afe_ports_mad_type)) {
 		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -2048,11 +1908,8 @@ enum afe_mad_type afe_port_get_mad_type(u16 port_id)
 
 	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_TX)
 		return MAD_SW_AUDIO;
-	if (port_id == AFE_PORT_ID_QUATERNARY_MI2S_TX)
-		i = MAD_SLIMBUS_PORT_COUNT + (port_id -
-			AFE_PORT_ID_PRIMARY_MI2S_TX) - 1;
-	else
-		i = port_id - SLIMBUS_0_RX;
+
+	i = port_id - SLIMBUS_0_RX;
 	if (i < 0 || i >= ARRAY_SIZE(afe_ports_mad_type)) {
 		pr_debug("%s: Non Slimbus port_id 0x%x\n", __func__, port_id);
 		return MAD_HW_NONE;
@@ -2587,7 +2444,7 @@ fail_cmd:
 }
 
 int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
-		u32 rate, u16 num_groups)
+		u32 rate)
 {
 	struct afe_audioif_config_command config;
 	int ret = 0;
@@ -2620,10 +2477,9 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		return ret;
 	}
 
-	/* Also send the topology id here if multiple ports are present */
+	/* Also send the topology id here: */
 	port_index = afe_get_port_index(port_id);
-	if (!(this_afe.afe_cal_mode[port_index] == AFE_CAL_MODE_NONE) &&
-		num_groups > 1) {
+	if (!(this_afe.afe_cal_mode[port_index] == AFE_CAL_MODE_NONE)) {
 		/* One time call: only for first time */
 		afe_send_custom_topology();
 		afe_send_port_topology_id(port_id);
@@ -2685,14 +2541,11 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
-	/* slot mapping is not need if there is only one group */
-	if (num_groups > 1) {
-		ret = afe_send_slot_mapping_cfg(&tdm_port->slot_mapping,
-						port_id);
-		if (ret < 0) {
-			pr_err("%s: afe send failed %d\n", __func__, ret);
-			goto fail_cmd;
-		}
+
+	ret = afe_send_slot_mapping_cfg(&tdm_port->slot_mapping, port_id);
+	if (ret < 0) {
+		pr_err("%s: afe send failed %d\n", __func__, ret);
+		goto fail_cmd;
 	}
 
 	if (tdm_port->custom_tdm_header.header_type) {
@@ -3155,8 +3008,6 @@ int afe_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_QUATERNARY_TDM_RX_7;
 	case AFE_PORT_ID_QUATERNARY_TDM_TX_7:
 		return IDX_AFE_PORT_ID_QUATERNARY_TDM_TX_7;
-	case AFE_LOOPBACK_TX:
-		return IDX_AFE_LOOPBACK_TX;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -5264,39 +5115,6 @@ int afe_set_lpass_clock_v2(u16 port_id, struct afe_clk_set *cfg)
 	return ret;
 }
 
-static int afe_get_service_ver(void)
-{
-	int ret;
-
-	ret = q6core_get_avcs_fwk_ver_info(AVCS_SERVICE_ID_AFE, NULL);
-	if (ret)
-		pr_err("%s: failed to get version info for AFE service %d\n",
-		       __func__, AVCS_SERVICE_ID_AFE);
-
-	return ret;
-}
-
-enum lpass_clk_ver afe_get_lpass_clk_ver(void)
-{
-	enum lpass_clk_ver lpass_clk_ver;
-
-	/*
-	 * Use different APIs to set the LPASS clock depending on the AFE
-	 * version. On success afe_get_service_ver returns 0 signyfing the
-	 * latest AFE version is supported. Use LPASS clock version 2 if the
-	 * latest AFE version is supported, otherwise use LPASS clock version 1.
-	 */
-	lpass_clk_ver = (afe_get_service_ver() == 0) ?
-		LPASS_CLK_VER_2 : LPASS_CLK_VER_1;
-
-	pr_debug("%s: returning %s\n", __func__,
-		 (lpass_clk_ver == LPASS_CLK_VER_2) ?
-			"LPASS_CLK_VER_2" : "LPASS_CLK_VER_1");
-
-	return lpass_clk_ver;
-}
-EXPORT_SYMBOL(afe_get_lpass_clk_ver);
-
 int afe_set_lpass_internal_digital_codec_clock(u16 port_id,
 			struct afe_digital_clk_cfg *cfg)
 {
@@ -5507,12 +5325,6 @@ int afe_get_sp_th_vi_ftm_data(struct afe_sp_th_vi_get_param *th_vi)
 		goto done;
 	}
 	index = q6audio_get_port_index(port);
-	if (index < 0) {
-		pr_err("%s: invalid port 0x%x, index %d\n",
-			__func__, port, index);
-		ret = -EINVAL;
-		goto done;
-	}
 	th_vi->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 	th_vi->hdr.pkt_size = sizeof(*th_vi);
@@ -5587,12 +5399,6 @@ int afe_get_sp_ex_vi_ftm_data(struct afe_sp_ex_vi_get_param *ex_vi)
 	}
 
 	index = q6audio_get_port_index(port);
-	if (index < 0 || index >= AFE_MAX_PORTS) {
-		pr_err("%s: AFE port index[%d] invalid!\n",
-				__func__, index);
-		ret = -EINVAL;
-		goto done;
-	}
 	ex_vi->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 	ex_vi->hdr.pkt_size = sizeof(*ex_vi);

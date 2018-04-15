@@ -199,11 +199,6 @@ static int snd_usb_copy_string_desc(struct mixer_build *state,
 				    int index, char *buf, int maxlen)
 {
 	int len = usb_string(state->chip->dev, index, buf, maxlen - 1);
-
-	if (len < 0)
-		return 0;
-
-	buf[len] = 0;
 	return len;
 }
 
@@ -930,17 +925,6 @@ static void volume_control_quirks(struct usb_mixer_elem_info *cval,
 			cval->res = 384;
 		}
 		break;
-
-	case USB_ID(0x1130, 0x1620): /* Logitech Speakers S150 */
-	/* This audio device has 2 channels and it explicitly requires the
-	 * host to send SET_CUR command on the volume control of both the
-	 * channels. 7936 = 0x1F00 is the default value.
-	 */
-		if (cval->channels == 2)
-			snd_usb_mixer_set_ctl_value(cval, UAC_SET_CUR,
-						(cval->control << 8) | 2, 7936);
-		break;
-
 	}
 }
 

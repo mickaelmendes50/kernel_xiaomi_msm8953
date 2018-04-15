@@ -26,6 +26,8 @@ fw-shipped- += acenic/tg1.bin
 else
 acenic-objs := acenic/tg1.bin acenic/tg2.bin
 endif
+fw-shipped-$(CONFIG_TOUCHSCREEN_TD4310_E7) += synaptics/startup_fw_update.img
+fw-shipped-$(CONFIG_TOUCHSCREEN_TD4310_LANSI_E7) += synaptics/startup_fw_update_lansi.img
 fw-shipped-$(CONFIG_ACENIC) += $(acenic-objs)
 fw-shipped-$(CONFIG_ADAPTEC_STARFIRE) += adaptec/starfire_rx.bin \
 					 adaptec/starfire_tx.bin
@@ -135,7 +137,6 @@ fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM) += keyspan_pda/xircom_pgs.fw
 fw-shipped-$(CONFIG_USB_VICAM) += vicam/firmware.fw
 fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
-fw-shipped-$(CONFIG_TOUCHSCREEN_TD4310) += synaptics/startup_fw_update.img
 
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 
