@@ -262,7 +262,7 @@ static void aw2013_brightness_set(struct aw2013_led *led)
 			return;
 		}
 	}
-	pr_err("dhx---set brightness: led_id = %d brightness = %d", led->id , (int)led->cdev.brightness);
+	//pr_err("dhx---set brightness: led_id = %d brightness = %d", led->id , (int)led->cdev.brightness);
 	if (led->cdev.brightness > 0) {
 		if (led->cdev.brightness > led->cdev.max_brightness)
 			led->cdev.brightness = led->cdev.max_brightness;

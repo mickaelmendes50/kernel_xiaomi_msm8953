@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,9 +29,6 @@ DEFINE_MSM_MUTEX(msm_actuator_mutex);
 #define PARK_LENS_LONG_STEP 7
 #define PARK_LENS_MID_STEP 5
 #define PARK_LENS_SMALL_STEP 3
-#define PARK_LENS_QUIET_UPPER_CODE 400
-#define PARK_LENS_QUIET_LOWER_CODE 200
-#define PARK_LENS_QUIET_STEP 25
 #define MAX_QVALUE 4096
 #endif
 
@@ -642,6 +639,8 @@ static int32_t msm_actuator_move_focus(
 		a_ctrl->curr_step_pos, dest_step_pos, curr_lens_pos);
 
 	while (a_ctrl->curr_step_pos != dest_step_pos) {
+		if (a_ctrl->curr_region_index >= a_ctrl->region_size)
+			break;
 		step_boundary =
 			a_ctrl->region_params[a_ctrl->curr_region_index].
 			step_bound[dir];
@@ -835,21 +834,27 @@ static int32_t msm_actuator_park_lens(struct msm_actuator_ctrl_t *a_ctrl)
 	next_lens_pos = a_ctrl->step_position_table[a_ctrl->curr_step_pos];
 	while (next_lens_pos) {
 		/* conditions which help to reduce park lens time */
-		if (next_lens_pos > (PARK_LENS_QUIET_UPPER_CODE + 200))
-			next_lens_pos = PARK_LENS_QUIET_UPPER_CODE + 200;
-				else if (next_lens_pos > PARK_LENS_QUIET_UPPER_CODE)
-						next_lens_pos = PARK_LENS_QUIET_UPPER_CODE;
-		else {
-			if (next_lens_pos > (PARK_LENS_QUIET_LOWER_CODE * 2))
-				next_lens_pos -= PARK_LENS_QUIET_STEP * 2;
-			else if (next_lens_pos > 40)
-				next_lens_pos -= 40;
-			else if (next_lens_pos > 20)
-				next_lens_pos -= 20;
-			else
-				next_lens_pos = 0;
-  		}
-
+		if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_LONG_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_LONG_STEP);
+		} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_MID_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_MID_STEP);
+		} else if (next_lens_pos > (a_ctrl->park_lens.max_step *
+			PARK_LENS_SMALL_STEP)) {
+			next_lens_pos = next_lens_pos -
+				(a_ctrl->park_lens.max_step *
+				PARK_LENS_SMALL_STEP);
+		} else {
+			next_lens_pos = (next_lens_pos >
+				a_ctrl->park_lens.max_step) ?
+				(next_lens_pos - a_ctrl->park_lens.
+				max_step) : 0;
+		}
 		a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
 			next_lens_pos, a_ctrl->park_lens.hw_params,
 			a_ctrl->park_lens.damping_delay);
@@ -868,10 +873,7 @@ static int32_t msm_actuator_park_lens(struct msm_actuator_ctrl_t *a_ctrl)
 		}
 		a_ctrl->i2c_tbl_index = 0;
 		/* Use typical damping time delay to avoid tick sound */
-				if (next_lens_pos > 100)
-						usleep_range (5000, 6000);
-				else
-						usleep_range (10000, 12000);
+		usleep_range(10000, 12000);
 	}
 
 	return 0;
@@ -1469,7 +1471,7 @@ static int32_t msm_actuator_config(struct msm_actuator_ctrl_t *a_ctrl,
 	case CFG_MOVE_FOCUS:
 		if (a_ctrl->func_tbl &&
 			a_ctrl->func_tbl->actuator_move_focus)
-			rc = a_ctrl->func_tbl->actuator_move_focus (a_ctrl,
+			rc = a_ctrl->func_tbl->actuator_move_focus(a_ctrl,
 				&cdata->cfg.move);
 		if (rc < 0)
 			pr_err("move focus failed %d\n", rc);
