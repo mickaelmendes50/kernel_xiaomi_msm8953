@@ -34,7 +34,6 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
@@ -55,8 +54,6 @@
 
 #define INPUT_PHYS_NAME "synaptics_dsx/touch_input"
 #define STYLUS_PHYS_NAME "synaptics_dsx/stylus"
-
-#define PROC_SYMLINK_PATH "touchpanel"
 
 #define VIRTUAL_KEY_MAP_FILE_NAME "virtualkeys." PLATFORM_DRIVER_NAME
 
@@ -761,9 +758,7 @@ static struct device_attribute attrs[] = {
 	__ATTR (wake_gesture, (S_IRUGO | S_IWUSR | S_IWGRP),
 			synaptics_rmi4_wake_gesture_show,
 			synaptics_rmi4_wake_gesture_store),
-	__ATTR(enable_dt2w, (S_IRUGO | S_IWUSR),
-			synaptics_rmi4_wake_gesture_show,
-			synaptics_rmi4_wake_gesture_store),
+
 #ifdef USE_DATA_SERVER
 	__ATTR (synad_pid, (S_IWUSR | S_IWGRP),
 			synaptics_rmi4_show_error,
@@ -4264,37 +4259,6 @@ struct synaptics_rmi4_data *rmi4_data =
 }
 #endif
 
-static ssize_t synaptics_rmi4_proc_init(struct kobject *sysfs_node_parent) {
-	int ret = 0;
-	char *driver_path;
-
-	struct proc_dir_entry *proc_entry_ts;
-
-	driver_path = kzalloc(PATH_MAX, GFP_KERNEL);
-	if (!driver_path) {
-		ret = -ENOMEM;
-		pr_err("%s: failed to allocate memory\n", __func__);
-		goto exit;
-	}
-
-	sprintf(driver_path, "/sys%s",
-			kobject_get_path(sysfs_node_parent, GFP_KERNEL));
-
-	pr_debug("%s: driver_path=%s\n", __func__, driver_path);
-
-	proc_entry_ts = proc_symlink(PROC_SYMLINK_PATH, NULL, driver_path);
-	if (!proc_entry_ts) {
-		ret = -ENOMEM;
-		goto free_driver_path;
-	}
-
-free_driver_path:
-	kfree(driver_path);
-exit:
-	return ret;
-}
-
-
 static int synaptics_rmi4_probe (struct platform_device *pdev)
 {
 	int retval;
@@ -4391,13 +4355,6 @@ static int synaptics_rmi4_probe (struct platform_device *pdev)
 				"%s: Failed to set up input device\n",
 				__func__);
 		goto err_set_input_dev;
-	}
-
-	retval = synaptics_rmi4_proc_init(&rmi4_data->input_dev->dev.kobj);
-	if (retval < 0) {
-		dev_err(&pdev->dev,
-				"%s: failed to create proc symlink\n",
-				__func__);
 	}
 
 #ifdef CONFIG_FB

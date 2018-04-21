@@ -580,7 +580,6 @@ int disable_nonboot_cpus(void)
 		BUG_ON(num_online_cpus() > 1);
 	else
 		pr_err("Non-boot CPUs are not disabled\n");
-
 	/*
 	 * Make sure the CPUs won't be enabled by someone else. We need to do
 	 * this even in case of failure as all disable_nonboot_cpus() users are
