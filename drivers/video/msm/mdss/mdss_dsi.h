@@ -228,6 +228,12 @@ extern struct device dsi_dev;
 extern u32 dsi_irq;
 extern struct mdss_dsi_ctrl_pdata *ctrl_list[];
 
+#ifdef CONFIG_PROJECT_VINCE
+extern bool synaptics_gesture_func_on;
+extern bool synaptics_gesture_func_on_lansi;
+extern bool NVT_gesture_func_on;
+#endif
+
 enum {
 	DSI_CTRL_0,
 	DSI_CTRL_1,
@@ -474,6 +480,8 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds cold_gamma_cmds;
 	struct dsi_panel_cmds warm_gamma_cmds;
 	struct dsi_panel_cmds default_gamma_cmds;
+	struct dsi_panel_cmds sRGB_on_cmds;
+	struct dsi_panel_cmds sRGB_off_cmds;
 	struct dsi_panel_cmds PM1_cmds;
 	struct dsi_panel_cmds PM2_cmds;
 	struct dsi_panel_cmds PM3_cmds;
