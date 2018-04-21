@@ -1218,19 +1218,18 @@ int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 extern u32 te_count;
 static u32 te_count_old = 1;
 
-int mdss_dsi_TE_NT35596_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+int mdss_dsi_TE_NT35596_check (struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-       int ret = 1;
+	int ret = 1;
 
 	if (te_count_old != te_count) {
-
 		te_count_old = te_count;
-	} else{
+	} else {
 		ret = 0;
 		pr_err("liujia te_count doesnt add as time");
 	}
-      if (te_count >= 10000)
-		{te_count = 0; }
+	if (te_count >= 10000)
+		te_count = 0;
 
 	return ret;
 
