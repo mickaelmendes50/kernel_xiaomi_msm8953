@@ -435,6 +435,24 @@ static ssize_t irq_ack(struct device *dev,
 }
 static DEVICE_ATTR(irq, S_IRUSR | S_IWUSR, irq_get, irq_ack);
 
+static ssize_t fingerdown_wait_set(struct device *dev,
+	struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+
+	dev_err(fpc1020->dev, "%s\n", __func__);
+	if (!strncmp(buf, "enable", strlen("enable")))
+		fpc1020->wait_finger_down = true;
+	else if (!strncmp(buf, "disable", strlen("disable")))
+		fpc1020->wait_finger_down = false;
+	else
+		return -EINVAL;
+
+	return count;
+}
+static DEVICE_ATTR(fingerdown_wait, S_IWUSR, NULL, fingerdown_wait_set);
+
 static ssize_t compatible_all_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -537,6 +555,7 @@ static struct attribute *attributes[] = {
 	&dev_attr_wakeup_enable.attr,
 	&dev_attr_clk_enable.attr,
 	&dev_attr_irq.attr,
+        &dev_attr_fingerdown_wait.attr,
 	&dev_attr_compatible_all.attr,
 	NULL
 };
