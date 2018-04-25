@@ -407,8 +407,6 @@ struct device_node *of_batterydata_get_best_profile(
 
 	/* check that profile id is in range of the measured batt_id */
 	if (checknum >
-#else
-	if (abs(best_id_kohm - batt_id_kohm) >
 			((best_id_kohm * id_range_pct) / 100)) {
 		pr_err("out of range: profile id %d batt id %d pct %d",
 			best_id_kohm, batt_id_kohm, id_range_pct);
