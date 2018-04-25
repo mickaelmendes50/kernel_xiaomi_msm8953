@@ -40,6 +40,10 @@
 #include <linux/ktime.h>
 #include <linux/pmic-voter.h>
 
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#endif
+
 /* Mask/Bit helpers */
 #define _SMB_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
@@ -1784,7 +1788,11 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 			}
 			chip->usb_max_current_ma = 500;
 		}
+#ifdef CONFIG_FORCE_FAST_CHARGE
+		if ((force_fast_charge > 0 && current_ma == CURRENT_500_MA) || current_ma == CURRENT_900_MA) {
+#else
 		if (current_ma == CURRENT_900_MA) {
+#endif
 			rc = smbchg_sec_masked_write(chip,
 					chip->usb_chgpth_base + CHGPTH_CFG,
 					CFG_USB_2_3_SEL_BIT, CFG_USB_3);
@@ -4924,7 +4932,7 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	/* cancel/wait for hvdcp pending work if any */
 	cancel_delayed_work_sync(&chip->hvdcp_det_work);
 	smbchg_relax(chip, PM_DETECT_HVDCP);
-	smbchg_change_usb_supply_type(chip, POWER_SUPPLY_TYPE_UNKNOWN);
+	smbchg_change_usb_supply_type(chip, POWER_SUPPLY_TYPE_USB);
 
 	if (chip->parallel.use_parallel_aicl) {
 		complete_all(&chip->hvdcp_det_done);
@@ -6086,7 +6094,6 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
 
-#ifndef MACH_XIAOMI_TISSOT
 	if (!rc && usb_supply_type == POWER_SUPPLY_TYPE_USB &&
 			prop.intval != POWER_SUPPLY_TYPE_USB &&
 			is_usb_present(chip)) {
@@ -6126,7 +6133,6 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 
 	if (usb_supply_type != POWER_SUPPLY_TYPE_USB)
 		goto  skip_current_for_non_sdp;
-#endif
 
 	pr_smb(PR_MISC, "usb type = %s current_limit = %d\n",
 			usb_type_name, current_limit);
