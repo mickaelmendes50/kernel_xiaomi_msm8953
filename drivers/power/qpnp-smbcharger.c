@@ -4916,19 +4916,16 @@ static int smbchg_restricted_charging(struct smbchg_chip *chip, bool enable)
 	return rc;
 }
 
-#ifdef CONFIG_MACH_XIAOMI_MIDO
 extern void ist30xx_set_ta_mode(bool mode);
 extern void tpd_usb_plugin(bool mode);
 extern void gtp_usb_plugin(bool mode);
 int set_usb_charge_mode_par = 0;
-#endif
 
 static void handle_usb_removal(struct smbchg_chip *chip)
 {
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	int rc;
 
-#ifdef CONFIG_MACH_XIAOMI_MIDO
 	if (set_usb_charge_mode_par == 1) {
 		ist30xx_set_ta_mode(0);
 	} else if (set_usb_charge_mode_par == 2) {
@@ -4936,7 +4933,6 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	} else if (set_usb_charge_mode_par == 3) {
 		gtp_usb_plugin(0);
 	}
-#endif
 
 	pr_smb(PR_STATUS, "triggered\n");
 	smbchg_aicl_deglitch_wa_check(chip);
@@ -5007,9 +5003,7 @@ static bool is_usbin_uv_high(struct smbchg_chip *chip)
 	return reg &= USBIN_UV_BIT;
 }
 
-#ifdef CONFIG_MACH_XIAOMI_MIDO
 static int rerun_apsd(struct smbchg_chip *chip);
-#endif
 #define HVDCP_NOTIFY_MS		2500
 static void handle_usb_insertion(struct smbchg_chip *chip)
 {
@@ -5017,7 +5011,6 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 	int rc;
 	char *usb_type_name = "null";
 
-#ifdef CONFIG_MACH_XIAOMI_MIDO
 	if (set_usb_charge_mode_par == 1) {
 		ist30xx_set_ta_mode(1);
 	} else if (set_usb_charge_mode_par == 2) {
@@ -5025,17 +5018,14 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 	} else if (set_usb_charge_mode_par == 3) {
 		gtp_usb_plugin(1);
 	}
-#endif
 
 	pr_smb(PR_STATUS, "triggered\n");
 	/* usb inserted */
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
-#ifdef CONFIG_MACH_XIAOMI_MIDO
 	if (usb_supply_type == POWER_SUPPLY_TYPE_USB_CDP || usb_supply_type == POWER_SUPPLY_TYPE_USB) {
 		rc = rerun_apsd(chip);
 		read_usb_type(chip, &usb_type_name, &usb_supply_type);
 	}
-#endif
 	pr_smb(PR_STATUS,
 		"inserted type = %d (%s)", usb_supply_type, usb_type_name);
 
