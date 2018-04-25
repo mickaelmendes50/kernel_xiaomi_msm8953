@@ -51,6 +51,7 @@
 #define WCD_MBHC_DEF_RLOADS 5
 #define MAX_WSA_CODEC_NAME_LENGTH 80
 #define MSM_DT_MAX_PROP_SIZE 80
+
 #define EXT_PA_MODE  5
 
 enum btsco_rates {
@@ -89,24 +90,14 @@ static int msm8952_wsa_switch_event(struct snd_soc_dapm_widget *w,
 static struct wcd_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
-#ifdef CONFIG_MACH_XIAOMI_TISSOT
 	.detect_extn_cable = false,
-#else
-	.detect_extn_cable = true,
-#endif
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
 	.key_code[0] = KEY_MEDIA,
-#if (defined CONFIG_MACH_XIAOMI_MIDO) || (defined CONFIG_MACH_XIAOMI_TISSOT)
 	.key_code[1] = BTN_1,
 	.key_code[2] = BTN_2,
 	.key_code[3] = 0,
-#else
-	.key_code[1] = KEY_VOICECOMMAND,
-	.key_code[2] = KEY_VOLUMEUP,
-	.key_code[3] = KEY_VOLUMEDOWN,
-#endif
 	.key_code[4] = 0,
 	.key_code[5] = 0,
 	.key_code[6] = 0,
@@ -252,7 +243,6 @@ int is_ext_spk_gpio_support(struct platform_device *pdev,
 {
 	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
 
-	int ret;
 	pr_debug("%s:Enter\n", __func__);
 
 	pdata->spk_ext_pa_gpio = of_get_named_gpio(pdev->dev.of_node,
@@ -1094,10 +1084,10 @@ static int msm8952_wsa_switch_event(struct snd_soc_dapm_widget *w,
 		}
 		if (atomic_dec_return(&supply->ref) == 0)
 			ret = regulator_disable(supply->supply);
-		if (ret)
-			dev_err(w->codec->component.card->dev,
-				"%s: Failed to disable wsa switch supply\n",
-				__func__);
+			if (ret)
+				dev_err(w->codec->component.card->dev,
+					"%s: Failed to disable wsa switch supply\n",
+					__func__);
 		break;
 	default:
 		break;
@@ -1523,8 +1513,6 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(v_hs_max, 1600);
-	S(v_hs_max, 1500);
-#endif
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);

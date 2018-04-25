@@ -48,13 +48,8 @@
 #include <linux/file.h>
 #include <linux/kthread.h>
 #include <linux/dma-buf.h>
-<<<<<<< HEAD
-#ifdef CONFIG_MACH_XIAOMI_TISSOT
 #include <linux/mdss_io_util.h>
 #include <linux/wakelock.h>
-#endif
-=======
->>>>>>> 03ba807... Import vince
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
 #define CREATE_TRACE_POINTS
@@ -63,7 +58,6 @@
 #include "mdss_mdp.h"
 #include "mdp3_ctrl.h"
 #include "mdss_dsi.h"
-#include "mdss_livedisplay.h"
 
 #ifdef CONFIG_PROJECT_VINCE
 #include "dsi_access.h"
@@ -1075,7 +1069,7 @@ static int mdss_fb_create_sysfs(struct msm_fb_data_type *mfd)
 	rc = sysfs_create_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
 	if (rc)
 		pr_err("sysfs group creation failed, rc=%d\n", rc);
-	return mdss_livedisplay_create_sysfs(mfd);
+	return rc;
 }
 
 static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)

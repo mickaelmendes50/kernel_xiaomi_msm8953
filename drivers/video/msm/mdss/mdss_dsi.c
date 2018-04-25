@@ -33,7 +33,6 @@
 #include "mdss_debug.h"
 #include "mdss_dsi_phy.h"
 #include "mdss_dba_utils.h"
-#include "mdss_livedisplay.h"
 #include <linux/hqsysfs.h>
 
 #ifdef CONFIG_PROJECT_VINCE
@@ -3017,9 +3016,6 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 					&ctrl_pdata->dba_work, HZ);
 		}
 		break;
-	case MDSS_EVENT_UPDATE_LIVEDISPLAY:
-		rc = mdss_livedisplay_update(ctrl_pdata, (int)(unsigned long) arg);
-		break;
 	default:
 		pr_debug("%s: unhandled event=%d\n", __func__, event);
 		break;
@@ -3474,7 +3470,6 @@ end:
 }
 
 struct mdss_panel_data *panel_data;
-#endif
 
 static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 {
@@ -3570,7 +3565,6 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 	}
 
 	panel_data = &ctrl_pdata->panel_data;
-#endif
 
 	rc = dsi_panel_device_register(pdev, dsi_pan_node, ctrl_pdata);
 	if (rc) {

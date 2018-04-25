@@ -30,7 +30,6 @@ DEFINE_MSM_MUTEX(msm_actuator_mutex);
 #define PARK_LENS_MID_STEP 5
 #define PARK_LENS_SMALL_STEP 3
 #define MAX_QVALUE 4096
-#endif
 
 static struct v4l2_file_operations msm_actuator_v4l2_subdev_fops;
 static int32_t msm_actuator_power_up(struct msm_actuator_ctrl_t *a_ctrl);
