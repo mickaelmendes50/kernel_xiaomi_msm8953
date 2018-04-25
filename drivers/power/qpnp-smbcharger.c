@@ -6120,7 +6120,6 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
 
-#if (defined CONFIG_MACH_XIAOMI_MIDO) || (defined CONFIG_MACH_XIAOMI_TISSOT)
 	if (!rc && usb_supply_type == POWER_SUPPLY_TYPE_USB &&
 			prop.intval != POWER_SUPPLY_TYPE_USB &&
 			is_usb_present(chip)) {
@@ -6160,7 +6159,6 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 
 	if (usb_supply_type != POWER_SUPPLY_TYPE_USB)
 		goto  skip_current_for_non_sdp;
-#endif
 
 	pr_smb(PR_MISC, "usb type = %s current_limit = %d\n",
 			usb_type_name, current_limit);
@@ -6363,11 +6361,9 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 		val->intval = get_prop_batt_health(chip);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
-#if (defined CONFIG_MACH_XIAOMI_MIDO) || (defined CONFIG_MACH_XIAOMI_TISSOT)
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
 #else
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
-#endif
 		break;
 	case POWER_SUPPLY_PROP_FLASH_CURRENT_MAX:
 		val->intval = smbchg_calc_max_flash_current(chip);
@@ -6579,7 +6575,6 @@ static irqreturn_t batt_warm_handler(int irq, void *_chip)
 {
 	struct smbchg_chip *chip = _chip;
 	u8 reg = 0;
-#if (defined CONFIG_MACH_XIAOMI_MIDO) || (defined CONFIG_MACH_XIAOMI_TISSOT)
 	int rc;
 	/* set the warm float voltage compensation,set the warm float voltage to 4.1V */
 	if (chip->float_voltage_comp != -EINVAL) {
@@ -6589,7 +6584,6 @@ static irqreturn_t batt_warm_handler(int irq, void *_chip)
 	pr_smb(PR_STATUS, "set float voltage comp to %d\n", chip->float_voltage_comp);
 
 	}
-#endif
 
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_warm = !!(reg & HOT_BAT_SOFT_BIT);
