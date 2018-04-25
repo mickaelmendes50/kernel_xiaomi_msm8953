@@ -1,5 +1,5 @@
 /* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2018 XiaoMi, Inc.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -26,10 +26,11 @@
 #include <linux/power_supply.h>
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/qpnp/qpnp-revid.h>
-#include "leds.h"
+#include <linux/leds-qpnp-flash.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
 #include <linux/string.h>
+#include "leds.h"
 #define FLASH_LED_PERIPHERAL_SUBTYPE(base)			(base + 0x05)
 #define FLASH_SAFETY_TIMER(base)				(base + 0x40)
 #define FLASH_MAX_CURRENT(base)					(base + 0x41)
@@ -79,6 +80,7 @@
 #define FLASH_LED_HDRM_SNS_ENABLE_MASK				0x81
 #define	FLASH_MASK_MODULE_CONTRL_MASK				0xE0
 #define FLASH_FOLLOW_OTST2_RB_MASK				0x08
+#define FLASH_PREPARE_OPTIONS_MASK				0x07
 
 #define FLASH_LED_TRIGGER_DEFAULT				"none"
 #define FLASH_LED_HEADROOM_DEFAULT_MV				500
@@ -171,9 +173,9 @@ struct flash_regulator_data {
 	u32			max_volt_uv;
 };
 
-char flashlight[]={"flashlight"};
-char flashlight_switch[]={"led:switch"};
-struct led_trigger *flashlight_switch_trigger=NULL;
+char flashlight[] = {"flashlight"};
+char flashlight_switch[] = {"led:switch"};
+struct led_trigger *flashlight_switch_trigger = NULL;
 /*
  * Configurations for each individual LED
  */
@@ -191,6 +193,7 @@ struct flash_node_data {
 	u8				trigger;
 	u8				enable;
 	u8				num_regulators;
+	bool				regulators_on;
 	bool				flash_on;
 };
 
@@ -1211,6 +1214,9 @@ static int flash_regulator_enable(struct qpnp_flash_led *led,
 {
 	int i, rc = 0;
 
+	if (flash_node->regulators_on == on)
+		return 0;
+
 	if (on == false) {
 		i = flash_node->num_regulators;
 		goto error_regulator_enable;
@@ -1225,12 +1231,71 @@ static int flash_regulator_enable(struct qpnp_flash_led *led,
 		}
 	}
 
+	flash_node->regulators_on = true;
 	return rc;
 
 error_regulator_enable:
 	while (i--)
 		regulator_disable(flash_node->reg_data[i].regs);
 
+	flash_node->regulators_on = false;
+	return rc;
+}
+
+int qpnp_flash_led_prepare(struct led_trigger *trig, int options,
+					int *max_current)
+{
+	struct led_classdev *led_cdev = trigger_to_lcdev(trig);
+	struct flash_node_data *flash_node;
+	struct qpnp_flash_led *led;
+	int rc;
+
+	if (!led_cdev) {
+		pr_err("Invalid led_trigger provided\n");
+		return -EINVAL;
+	}
+
+	flash_node = container_of(led_cdev, struct flash_node_data, cdev);
+	led = dev_get_drvdata(&flash_node->spmi_dev->dev);
+
+	if (!(options & FLASH_PREPARE_OPTIONS_MASK)) {
+		dev_err(&led->spmi_dev->dev, "Invalid options %d\n", options);
+		return -EINVAL;
+	}
+
+	mutex_lock(&led->flash_led_lock);
+
+	if (options & ENABLE_REGULATOR) {
+		rc = flash_regulator_enable(led, flash_node, true);
+		if (rc < 0) {
+			dev_err(&led->spmi_dev->dev,
+				"enable regulator failed, rc=%d\n", rc);
+			goto out;
+		}
+	}
+
+	if (options & DISABLE_REGULATOR) {
+		rc = flash_regulator_enable(led, flash_node, false);
+		if (rc < 0) {
+			dev_err(&led->spmi_dev->dev,
+				"disable regulator failed, rc=%d\n", rc);
+			goto out;
+		}
+	}
+
+	if (options & QUERY_MAX_CURRENT) {
+		rc = qpnp_flash_led_get_max_avail_current(flash_node, led);
+		if (rc < 0) {
+			dev_err(&led->spmi_dev->dev,
+				"query max current failed, rc=%d\n", rc);
+			goto out;
+		}
+		*max_current = rc;
+		rc = 0;
+	}
+
+out:
+	mutex_unlock(&led->flash_led_lock);
 	return rc;
 }
 
@@ -1314,6 +1379,18 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					"INT_LATCHED_CLR write failed\n");
 			goto exit_flash_led_work;
 		}
+	}
+
+	if (led->flash_node[led->num_leds - 1].id == FLASH_LED_SWITCH &&
+					flash_node->id != FLASH_LED_SWITCH) {
+		led->flash_node[led->num_leds - 1].trigger |=
+						(0x80 >> flash_node->id);
+		if (flash_node->id == FLASH_LED_0)
+			led->flash_node[led->num_leds - 1].prgm_current =
+						flash_node->prgm_current;
+		else if (flash_node->id == FLASH_LED_1)
+			led->flash_node[led->num_leds - 1].prgm_current2 =
+						flash_node->prgm_current;
 	}
 
 	if (flash_node->type == TORCH) {
@@ -1727,6 +1804,10 @@ unlock_mutex:
 	return;
 
 turn_off:
+	if (led->flash_node[led->num_leds - 1].id == FLASH_LED_SWITCH &&
+					flash_node->id != FLASH_LED_SWITCH)
+		led->flash_node[led->num_leds - 1].trigger &=
+						~(0x80 >> flash_node->id);
 	if (flash_node->type == TORCH) {
 		/*
 		 * Checking LED fault status detects hardware open fault.
@@ -1838,21 +1919,6 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 
 			flash_node->prgm_current = value;
 			flash_node->flash_on = value ? true : false;
-			if (value)
-				led->flash_node[led->num_leds - 1].trigger |=
-					(0x80 >> flash_node->id);
-                        else
-				led->flash_node[led->num_leds - 1].trigger &=
-					~(0x80 >> flash_node->id);
-
-			if (flash_node->id == FLASH_LED_0)
-			led->flash_node[led->num_leds - 1].
-				prgm_current = flash_node->prgm_current;
-			else if (flash_node->id == FLASH_LED_1)
-				led->flash_node[led->num_leds - 1].
-				prgm_current2 =
-				flash_node->prgm_current;
-			return;
 		} else if (flash_node->id == FLASH_LED_SWITCH) {
 			if (!value) {
 				flash_node->prgm_current = 0;
@@ -1874,8 +1940,9 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 static void mido_flash_led_brightness_set(struct led_classdev *led_cdev,
 						enum led_brightness value)
 {
-	qpnp_flash_led_brightness_set(led_cdev,value);
-	led_trigger_event(flashlight_switch_trigger,(value?1:0));
+
+	qpnp_flash_led_brightness_set(led_cdev, value);
+	led_trigger_event(flashlight_switch_trigger, (value?1:0));
 }
 /* lancelot add end*/
 
@@ -2542,7 +2609,7 @@ static int qpnp_flash_led_probe(struct spmi_device *spmi)
 			return rc;
 		}
 
-		if( !strncmp(led->flash_node[i].cdev.name,flashlight,strlen(flashlight)) ) {
+		if (!strncmp(led->flash_node[i].cdev.name, flashlight, strlen(flashlight))) {
 			led->flash_node[i].cdev.brightness_set = mido_flash_led_brightness_set;
 		}
 
@@ -2571,9 +2638,9 @@ static int qpnp_flash_led_probe(struct spmi_device *spmi)
 			dev_err(&spmi->dev, "Unable to register led\n");
 			goto error_led_register;
 		}
-		if( !strncmp(led->flash_node[i].cdev.name,flashlight_switch,strlen(flashlight_switch)) ) 
-		{
-			flashlight_switch_trigger=led->flash_node[i].cdev.trigger;
+
+		if (!strncmp(led->flash_node[i].cdev.name, flashlight_switch, strlen(flashlight_switch))) {
+			flashlight_switch_trigger = led->flash_node[i].cdev.trigger;
 		}
 
 		led->flash_node[i].cdev.dev->of_node = temp;
