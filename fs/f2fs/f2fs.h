@@ -2909,6 +2909,8 @@ int f2fs_flush_device_cache(struct f2fs_sb_info *sbi);
 void destroy_flush_cmd_control(struct f2fs_sb_info *sbi, bool free);
 void invalidate_blocks(struct f2fs_sb_info *sbi, block_t addr);
 bool is_checkpointed_data(struct f2fs_sb_info *sbi, block_t blkaddr);
+void init_discard_policy(struct discard_policy *dpolicy, int discard_type,
+						unsigned int granularity);
 void drop_discard_cmd(struct f2fs_sb_info *sbi);
 void stop_discard_thread(struct f2fs_sb_info *sbi);
 bool f2fs_wait_discard_bios(struct f2fs_sb_info *sbi);
@@ -3025,6 +3027,7 @@ int f2fs_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 			u64 start, u64 len);
 bool should_update_inplace(struct inode *inode, struct f2fs_io_info *fio);
 bool should_update_outplace(struct inode *inode, struct f2fs_io_info *fio);
+void f2fs_set_page_dirty_nobuffers(struct page *page);
 int __f2fs_write_data_pages(struct address_space *mapping,
 						struct writeback_control *wbc,
 						enum iostat_type io_type);
