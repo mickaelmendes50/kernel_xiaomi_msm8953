@@ -766,7 +766,7 @@ cmd_rel_host:
 			       mmc_hostname(card->host), __func__);
 	}
 cmd_rel_host_halt:
-	mmc_put_card(card);
+	mmc_release_host(card->host);
 
 cmd_done:
 	mmc_blk_put(md);
@@ -3722,7 +3722,6 @@ cmdq_switch:
 		pr_err("%s: %s: mmc_blk_cmdq_switch failed: %d\n",
 			mmc_hostname(host), __func__,  err);
 		ret = err;
-		goto out;
 	}
 cmdq_unhalt:
 	err = mmc_cmdq_halt(host, false);
@@ -3773,7 +3772,7 @@ static int mmc_blk_cmdq_issue_rq(struct mmc_queue *mq, struct request *req)
 		} else {
 			pr_err("%s: %s: partition switch failed err = %d\n",
 				md->disk->disk_name, __func__, err);
-			ret = err;
+			ret = 0;
 			goto out;
 		}
 	}

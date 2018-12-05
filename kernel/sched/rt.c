@@ -5,6 +5,7 @@
 
 #include "sched.h"
 
+#include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <trace/events/sched.h>
 
@@ -339,13 +340,17 @@ static inline int has_pushable_tasks(struct rq *rq)
 	return !plist_head_empty(&rq->rt.pushable_tasks);
 }
 
-static inline void set_post_schedule(struct rq *rq)
+static DEFINE_PER_CPU(struct callback_head, rt_balance_head);
+
+static void push_rt_tasks(struct rq *);
+
+static inline void queue_push_tasks(struct rq *rq)
 {
-	/*
-	 * We detect this state here so that we can avoid taking the RQ
-	 * lock again later if there is no need to push
-	 */
-	rq->post_schedule = has_pushable_tasks(rq);
+	if (!has_pushable_tasks(rq))
+		return;
+
+	queue_balance_callback(rq, &per_cpu(rt_balance_head, rq->cpu),
+		push_rt_tasks);
 }
 
 static void enqueue_pushable_task(struct rq *rq, struct task_struct *p)
@@ -402,7 +407,7 @@ static inline int pull_rt_task(struct rq *this_rq)
 	return 0;
 }
 
-static inline void set_post_schedule(struct rq *rq)
+static inline void queue_push_tasks(struct rq *rq)
 {
 }
 #endif /* CONFIG_SMP */
@@ -1443,11 +1448,29 @@ select_task_rq_rt_hmp(struct task_struct *p, int cpu, int sd_flag, int flags)
 	return cpu;
 }
 
+/*
+ * Return whether the task on the given cpu is currently non-preemptible
+ * while handling a potentially long softint, or if the task is likely
+ * to block preemptions soon because it is a ksoftirq thread that is
+ * handling slow softints.
+ */
+bool
+task_may_not_preempt(struct task_struct *task, int cpu)
+{
+	__u32 softirqs = per_cpu(active_softirqs, cpu) |
+			 __IRQ_STAT(cpu, __softirq_pending);
+	struct task_struct *cpu_ksoftirqd = per_cpu(ksoftirqd, cpu);
+	return ((softirqs & LONG_SOFTIRQ_MASK) &&
+		(task == cpu_ksoftirqd ||
+		 task_thread_info(task)->preempt_count & SOFTIRQ_MASK));
+}
+
 static int
 select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
 	struct task_struct *curr;
 	struct rq *rq;
+	bool may_not_preempt;
 
 	if (p->nr_cpus_allowed == 1)
 		goto out;
@@ -1465,7 +1488,12 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 	curr = ACCESS_ONCE(rq->curr); /* unlocked access */
 
 	/*
-	 * If the current task on @p's runqueue is an RT task, then
+	 * If the current task on @p's runqueue is a softirq task,
+	 * it may run without preemption for a time that is
+	 * ill-suited for a waiting RT task. Therefore, try to
+	 * wake this RT task on another runqueue.
+	 *
+	 * Also, if the current task on @p's runqueue is an RT task, then
 	 * try to see if we can wake this RT task up on another
 	 * runqueue. Otherwise simply start this RT task
 	 * on its current runqueue.
@@ -1486,12 +1514,21 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 	 * This test is optimistic, if we get it wrong the load-balancer
 	 * will have to sort it out.
 	 */
-	if (curr && unlikely(rt_task(curr)) &&
-	    (curr->nr_cpus_allowed < 2 ||
-	     curr->prio <= p->prio)) {
+	may_not_preempt = task_may_not_preempt(curr, cpu);
+	if (curr && (may_not_preempt ||
+		     (unlikely(rt_task(curr)) &&
+		      (curr->nr_cpus_allowed < 2 ||
+		       curr->prio <= p->prio)))) {
 		int target = find_lowest_rq(p);
-
-		if (target != -1)
+ 		/*
+		 * If cpu is non-preemptible, prefer remote cpu
+		 * even if it's running a higher-prio task.
+ 		 * Otherwise: Possible race. Don't bother moving it if the
+		 * destination CPU is not running a lower priority task.
+ 		 */
+		if (target != -1 &&
+		    (may_not_preempt ||
+		     p->prio < cpu_rq(target)->rt.highest_prio.curr))
 			cpu = target;
 	}
 	rcu_read_unlock();
@@ -1630,7 +1667,7 @@ pick_next_task_rt(struct rq *rq, struct task_struct *prev)
 	/* The running task is never eligible for pushing */
 	dequeue_pushable_task(rq, p);
 
-	set_post_schedule(rq);
+	queue_push_tasks(rq);
 
 	return p;
 }
@@ -2075,11 +2112,6 @@ skip:
 	return ret;
 }
 
-static void post_schedule_rt(struct rq *rq)
-{
-	push_rt_tasks(rq);
-}
-
 /*
  * If we are not running and we are not going to reschedule soon, we should
  * try to push tasks away now
@@ -2352,7 +2384,6 @@ const struct sched_class rt_sched_class = {
 	.set_cpus_allowed       = set_cpus_allowed_rt,
 	.rq_online              = rq_online_rt,
 	.rq_offline             = rq_offline_rt,
-	.post_schedule		= post_schedule_rt,
 	.task_woken		= task_woken_rt,
 	.switched_from		= switched_from_rt,
 #endif

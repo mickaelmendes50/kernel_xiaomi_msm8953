@@ -357,7 +357,7 @@ struct tty_driver *tty_find_polling_driver(char *name, int *line)
 	mutex_lock(&tty_mutex);
 	/* Search through the tty devices to look for a match */
 	list_for_each_entry(p, &tty_drivers, tty_drivers) {
-		if (strncmp(name, p->name, len) != 0)
+		if (!len || strncmp(name, p->name, len) != 0)
 			continue;
 		stp = str;
 		if (*stp == ',')
@@ -1633,7 +1633,7 @@ static void release_tty(struct tty_struct *tty, int idx)
 	tty->port->itty = NULL;
 	if (tty->link)
 		tty->link->port->itty = NULL;
-	cancel_work_sync(&tty->port->buf.work);
+	flush_kthread_work(&tty->port->buf.work);
 
 	if (tty->link)
 		tty_kref_put(tty->link);

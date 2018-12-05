@@ -64,7 +64,6 @@ config ARM64
 	select HAVE_FUNCTION_TRACER
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_GENERIC_DMA_COHERENT
-	select HAVE_HW_BREAKPOINT if PERF_EVENTS
 	select HAVE_IRQ_TIME_ACCOUNTING
 	select HAVE_MEMBLOCK
 	select HAVE_PATA_PLATFORM
@@ -283,8 +282,6 @@ config ARCH_MSM
 	select ARCH_HAS_OPP
 	select THERMAL_WRITABLE_TRIPS
 	select CPU_FREQ_MSM
-	select ARM_MEMLAT_MON
-	select DEVFREQ_GOV_MEMLAT
 	help
 	  This enables support for the ARMv8 based Qualcomm chipsets.
 
@@ -701,7 +698,6 @@ config ARCH_NR_GPIO
 
 
 source kernel/Kconfig.preempt
-
 source kernel/Kconfig.hz
 
 config ARCH_HAS_HOLES_MEMORYMODEL

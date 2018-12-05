@@ -23,7 +23,7 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/suspend.h>
-#include <linux/clk.h>
+#include <linux/clk/msm-clk-provider.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -248,13 +248,17 @@ static int msm_cpufreq_suspend(void)
 
 static int msm_cpufreq_resume(void)
 {
-	int cpu, ret;
+	int cpu;
+#ifndef CONFIG_CPU_BOOST
+	int ret;
 	struct cpufreq_policy policy;
+#endif
 
 	for_each_possible_cpu(cpu) {
 		per_cpu(suspend_data, cpu).device_suspended = 0;
 	}
 
+#ifndef CONFIG_CPU_BOOST
 	/*
 	 * Freq request might be rejected during suspend, resulting
 	 * in policy->cur violating min/max constraint.
@@ -276,6 +280,7 @@ static int msm_cpufreq_resume(void)
 				cpu);
 	}
 	put_online_cpus();
+#endif
 
 	return NOTIFY_DONE;
 }
@@ -398,6 +403,7 @@ static int __init msm_cpufreq_probe(struct platform_device *pdev)
 		c = devm_clk_get(dev, clk_name);
 		if (IS_ERR(c))
 			return PTR_ERR(c);
+		c->flags |= CLKFLAG_NO_RATE_CACHE;
 		cpu_clk[cpu] = c;
 	}
 	hotplug_ready = true;

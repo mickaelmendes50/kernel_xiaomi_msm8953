@@ -411,6 +411,7 @@ int diag_mask_param(void)
 {
 	return diag_mask_clear_param;
 }
+
 void diag_clear_masks(int pid)
 {
 	int ret;
@@ -456,6 +457,7 @@ static void diag_close_logging_process(const int pid)
 	mutex_unlock(&driver->diag_maskclear_mutex);
 
 	mutex_lock(&driver->diagchar_mutex);
+	session_peripheral_mask = session_info->peripheral_mask;
 	for (i = 0; i < NUM_MD_SESSIONS; i++)
 		if (MD_PERIPHERAL_MASK(i) & session_peripheral_mask)
 			diag_mux_close_peripheral(DIAG_LOCAL_PROC, i);
@@ -951,7 +953,6 @@ static int diag_remote_init(void)
 			poolsize_mdm_dci_write);
 	diagmem_setsize(POOL_TYPE_QSC_MUX, itemsize_qsc_usb,
 			poolsize_qsc_usb);
-	diag_md_mdm_init();
 	driver->hdlc_encode_buf = kzalloc(DIAG_MAX_HDLC_BUF_SIZE, GFP_KERNEL);
 	if (!driver->hdlc_encode_buf)
 		return -ENOMEM;
@@ -2105,7 +2106,6 @@ long diagchar_compat_ioctl(struct file *filp,
 	uint16_t remote_dev;
 	struct diag_dci_client_tbl *dci_client = NULL;
 	struct diag_logging_mode_param_t mode_param;
-	struct diag_con_all_param_t con_param;
 
 	switch (iocmd) {
 	case DIAG_IOCTL_COMMAND_REG:
@@ -2217,15 +2217,6 @@ long diagchar_compat_ioctl(struct file *filp,
 	case DIAG_IOCTL_HDLC_TOGGLE:
 		result = diag_ioctl_hdlc_toggle(ioarg);
 		break;
-	case DIAG_IOCTL_QUERY_CON_ALL:
-		con_param.diag_con_all = DIAG_CON_ALL;
-		con_param.num_peripherals = NUM_PERIPHERALS;
-		if (copy_to_user((void __user *)ioarg, &con_param,
-				sizeof(struct diag_con_all_param_t)))
-			result = -EFAULT;
-		else
-			result = 0;
-		break;
 	}
 	return result;
 }
@@ -2240,7 +2231,6 @@ long diagchar_ioctl(struct file *filp,
 	uint16_t remote_dev;
 	struct diag_dci_client_tbl *dci_client = NULL;
 	struct diag_logging_mode_param_t mode_param;
-	struct diag_con_all_param_t con_param;
 
 	switch (iocmd) {
 	case DIAG_IOCTL_COMMAND_REG:
@@ -2351,15 +2341,6 @@ long diagchar_ioctl(struct file *filp,
 		break;
 	case DIAG_IOCTL_HDLC_TOGGLE:
 		result = diag_ioctl_hdlc_toggle(ioarg);
-		break;
-	case DIAG_IOCTL_QUERY_CON_ALL:
-		con_param.diag_con_all = DIAG_CON_ALL;
-		con_param.num_peripherals = NUM_PERIPHERALS;
-		if (copy_to_user((void __user *)ioarg, &con_param,
-				sizeof(struct diag_con_all_param_t)))
-			result = -EFAULT;
-		else
-			result = 0;
 		break;
 	}
 	return result;

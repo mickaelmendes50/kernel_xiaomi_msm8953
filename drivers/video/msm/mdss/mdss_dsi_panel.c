@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,9 +22,9 @@
 #include <linux/qpnp/pwm.h>
 #include <linux/err.h>
 #include <linux/string.h>
+#include <linux/display_state.h>
 
 #include "mdss_dsi.h"
-#include "mdss_debug.h"
 #ifdef TARGET_HW_MDSS_HDMI
 #include "mdss_dba_utils.h"
 #endif
@@ -37,6 +37,13 @@
 #define VSYNC_DELAY msecs_to_jiffies(17)
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
+
+bool display_on = true;
+
+bool is_display_on()
+{
+	return display_on;
+}
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -256,12 +263,11 @@ static void mdss_dsi_panel_set_idle_mode(struct mdss_panel_data *pdata,
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 						panel_data);
 
-	pr_info("%s: Idle (%d->%d)\n", __func__, ctrl->idle, enable);
+	pr_debug("%s: Idle (%d->%d)\n", __func__, ctrl->idle, enable);
 
 	if (ctrl->idle == enable)
 		return;
 
-	MDSS_XLOG(ctrl->idle, enable);
 	if (enable) {
 		if (ctrl->idle_on_cmds.cmd_cnt) {
 			mdss_dsi_panel_cmds_send(ctrl, &ctrl->idle_on_cmds,
@@ -312,7 +318,6 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			rc);
 		goto rst_gpio_err;
 	}
-
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->bklt_en_gpio,
 						"bklt_enable");
@@ -430,8 +435,6 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 						__func__);
 					goto exit;
 				}
-				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
-				usleep_range(100, 110);
 			}
 
 			if (pdata->panel_info.rst_seq_len) {
@@ -490,7 +493,6 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 		}
 		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
-			usleep_range(100, 110);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
 
@@ -1042,6 +1044,8 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+
+	display_on = true;
 
 	pinfo = &pdata->panel_info;
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
@@ -2524,19 +2528,24 @@ static int mdss_panel_parse_display_timings(struct device_node *np,
 
 	timings_np = of_get_child_by_name(np, "qcom,mdss-dsi-display-timings");
 	if (!timings_np) {
-		struct dsi_panel_timing pt;
-		memset(&pt, 0, sizeof(struct dsi_panel_timing));
+		struct dsi_panel_timing *pt;
+
+		pt = kzalloc(sizeof(*pt), GFP_KERNEL);
+		if (!pt)
+			return -ENOMEM;
 
 		/*
 		 * display timings node is not available, fallback to reading
 		 * timings directly from root node instead
 		 */
 		pr_debug("reading display-timings from panel node\n");
-		rc = mdss_dsi_panel_timing_from_dt(np, &pt, panel_data);
+		rc = mdss_dsi_panel_timing_from_dt(np, pt, panel_data);
 		if (!rc) {
-			mdss_dsi_panel_config_res_properties(np, &pt,
+			mdss_dsi_panel_config_res_properties(np, pt,
 					panel_data, true);
-			rc = mdss_dsi_panel_timing_switch(ctrl, &pt.timing);
+			rc = mdss_dsi_panel_timing_switch(ctrl, &pt->timing);
+		} else {
+			kfree(pt);
 		}
 		return rc;
 	}
